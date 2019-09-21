@@ -1,0 +1,2 @@
+ExecUpPost="/opt/netctl-tray/connect & "$ExecUpPost
+ExecDownPre="/opt/netctl-tray/disconnect & "$ExecDownPre
