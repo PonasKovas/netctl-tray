@@ -25,13 +25,13 @@ fn main() {
 	QApplication::init(|_app| {
 		unsafe {
 			let icons = [
-				load_icon("/home/mykolas/rust/netctl-tray/assets/no_profile.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/good.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/medium.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/bad.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/good_no_internet.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/medium_no_internet.svg"),
-				load_icon("/home/mykolas/rust/netctl-tray/assets/bad_no_internet.svg"),
+				load_icon("/opt/netctl-tray/no_profile.svg"),
+				load_icon("/opt/netctl-tray/good.svg"),
+				load_icon("/opt/netctl-tray/medium.svg"),
+				load_icon("/opt/netctl-tray/bad.svg"),
+				load_icon("/opt/netctl-tray/good_no_internet.svg"),
+				load_icon("/opt/netctl-tray/medium_no_internet.svg"),
+				load_icon("/opt/netctl-tray/bad_no_internet.svg"),
 			];
 			// initiliaze tray
 			let mut tray = QSystemTrayIcon::from_q_icon(
@@ -106,7 +106,7 @@ fn main() {
 			});
 			menu.add_action_q_icon_q_string(
 				QIcon::from_q_string(
-					QString::from_std_str("/home/mykolas/rust/netctl-tray/assets/exit.svg").as_mut_ref()
+					QString::from_std_str("/opt/netctl-tray/exit.svg").as_mut_ref()
 				).as_mut_ref(),
 				QString::from_std_str("Exit").as_mut_ref()
 			).triggered().connect(&exit_app);
