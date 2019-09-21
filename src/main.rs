@@ -41,21 +41,23 @@ fn main() {
 			let tray_click = SlotOfActivationReason::new(|reason| {
 				let reason = reason.to_int();
 				if reason == 3 || reason == 4 {
-					// Left-click or middle-click
-					// Find out the active profile
-					let mut active_profile = "none".to_string();
-					for (active, name) in get_profiles() {
-						if active {
-							active_profile = name;
-							break;
+					thread::spawn(move || {
+						// Left-click or middle-click
+						// Find out the active profile
+						let mut active_profile = "none".to_string();
+						for (active, name) in get_profiles() {
+							if active {
+								active_profile = name;
+								break;
+							}
 						}
-					}
-					send_notification(&format!(
-						"Profile: <b>{}</b>, Ping: <b>{} ms</b>, Quality: <b>{}/70</b>",
-						active_profile,
-						ping(),
-						if active_profile == "none" { 0 } else {conn_strength(&active_profile) },
-					));
+						send_notification(&format!(
+							"Profile: <b>{}</b>, Ping: <b>{} ms</b>, Quality: <b>{}/70</b>",
+							active_profile,
+							ping(),
+							if active_profile == "none" { 0 } else {conn_strength(&active_profile) },
+						));
+					});
 				}
 			});
 			tray.activated().connect(&tray_click);
