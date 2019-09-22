@@ -221,7 +221,8 @@ fn set_profile(profile: String) {
 			}
 		}
 		// It's not active, start it
-		Command::new("netctl")
+		Command::new("fakeroot")
+				.arg("netctl")
 				.arg("switch-to")
 				.arg(profile)
 				.output()
