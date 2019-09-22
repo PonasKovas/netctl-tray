@@ -1,6 +1,10 @@
 # netctl-tray
 A lightweight netctl tray app with notifications written in Rust.
 
+## Screenshots
+
+![](https://i.imgur.com/5PavZiO.png) ![](https://i.imgur.com/mwWpkA4.png) ![](https://i.imgur.com/yghZ4Gt.png)
+
 ## Usage
 
 To launch the tray app:
