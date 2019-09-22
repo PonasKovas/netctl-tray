@@ -1,7 +1,7 @@
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.systemd1.manage-units") {
-	var netctlInstanceMatcher = /netctl@[a-z,\\,\d]+\.service/i.test(action.lookup("unit"));
-        if (netctlInstanceMatcher) {
+    var netctlInstanceMatcher = /netctl@[a-z,\\,\d]+\.service/i.test(action.lookup("unit"));
+        if (netctlInstanceMatcher && subject.isInGroup("wheel")) {
             var verb = action.lookup("verb");
             if (verb == "start" || verb == "stop" || verb == "restart") {
                 return polkit.Result.YES;
