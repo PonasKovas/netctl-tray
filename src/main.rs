@@ -26,8 +26,8 @@ fn main() {
 		Ok(u) => { u=="root" },
 		Err(_)=> false,
 	};
-	if !as_root {
-		println!("Warning: tray started without root privileges! Some functions may not work!");
+	if as_root {
+		println!("Warning: tray started as root! This is unsafe!");
 	}
 	// Start another thread for communicating with netctl
 	QApplication::init(|_app| {
