@@ -21,6 +21,14 @@ enum Status {
 }
 
 fn main() {
+	// Check if started as root
+	let as_root = match std::env::var("USER") {
+		Ok(u) => { u=="root" },
+		Err(_)=> false,
+	};
+	if !as_root {
+		println!("Warning: tray started without root privileges! Some functions may not work!");
+	}
 	// Start another thread for communicating with netctl
 	QApplication::init(|_app| {
 		unsafe {
@@ -56,7 +64,7 @@ fn main() {
 							active_profile,
 							ping(),
 							if active_profile == "none" { 0 } else {conn_strength(&active_profile) },
-						));
+						), as_root);
 					});
 				}
 			});
@@ -233,12 +241,17 @@ unsafe fn load_icon(path: &str) -> CppBox<QIcon> {
 	)
 }
 
-fn send_notification(message: &str) {
-	let (_, display, _) = sh!("echo -n $(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##' | head -n 1)");
-	let (_, user, _) = sh!("echo -n $(who | grep '(:{})' | awk '{{print $1}}' | head -n 1)", display);
-	let (_, uid, _) = sh!("echo -n $(id -u {})", user);
+fn send_notification(message: &str, as_root: bool) {
+	if as_root {
+		let (_, display, _) = sh!("echo -n $(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##' | head -n 1)");
+		let (_, user, _) = sh!("echo -n $(who | grep '(:{})' | awk '{{print $1}}' | head -n 1)", display);
+		let (_, uid, _) = sh!("echo -n $(id -u {})", user);
 
-	sh!("su {} -c \"DISPLAY=:{} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{}/bus notify-send 'netctl' '{}' -t 4000 -i network-wireless\"", user, display, uid, message);
+		sh!("su {} -c \"DISPLAY=:{} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{}/bus notify-send 'netctl' '{}' -t 4000 -i network-wireless\"", user, display, uid, message);
+	} else {
+		sh!("notify-send 'netctl' '{}' -t 4000 -i network-wireless", message);
+	}
+	
 }
 
 fn ping() -> String {
