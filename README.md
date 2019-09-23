@@ -9,16 +9,16 @@ A lightweight netctl tray app with notifications written in Rust.
 
 To launch the tray app:
 ```
-# netctl-tray
+$ netctl-tray
 ```
-Note: make sure to launch the app as *root*, otherwise some features, like profile changing, won't work.
+Note: launching the app as root is not safe.
 
 ## Installation
 
-This app is available on the AUR
+[This app is available on the AUR](https://aur.archlinux.org/packages/netctl-tray/)
 ```
 $ git clone https://aur.archlinux.org/netctl-tray.git
-& cd netctl-tray
+$ cd netctl-tray
 $ makepkg -si
 ```
 
