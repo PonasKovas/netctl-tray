@@ -207,23 +207,22 @@ fn get_profiles() -> Vec<(bool, String)> {
 
 fn set_profile(profile: String) {
 	thread::spawn( move || {
-		// If the profile is already active, turn it off, otherwise - turn it on
+		// Stop the currently active profile
 		let profiles = get_profiles();
 		for (active, name) in profiles {
-			if active && name==profile {
+			if active {
 				// It's already active
 				Command::new("netctl")
 						.arg("stop")
-						.arg(profile)
+						.arg(name)
 						.output()
 						.expect("failed to run netctl");
-				return;
+				break;
 			}
 		}
-		// It's not active, start it
-		Command::new("fakeroot")
-				.arg("netctl")
-				.arg("switch-to")
+		// Start the new profile
+		Command::new("netctl")
+				.arg("start")
 				.arg(profile)
 				.output()
 				.expect("failed to run netctl");
