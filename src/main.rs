@@ -280,12 +280,13 @@ fn conn_strength(profile: &str) -> u8 {
 	let conn_strength = Command::new("iwconfig")
 			.output()
 			.expect("failed to run iwconfig").stdout;
-	let conn_strength =
+	let conn_strength: u8 = match
 		RegexBuilder::new(&((&used_interface[1]).to_string() + r"(.|\n)+?Link Quality=([0-9]+)/70"))
 		.case_insensitive(true)
 		.build().unwrap()
-		.captures(std::str::from_utf8(&conn_strength).unwrap())
-		.expect(&format!("Failed to parse the output of iwconfig"));
-	let conn_strength: u8 = (&conn_strength[2]).to_string().parse().unwrap();
+		.captures(std::str::from_utf8(&conn_strength).unwrap()) {
+			Some(c) => (&c[2]).to_string().parse().unwrap(),
+			None	=> 0,
+		};
 	conn_strength
 }
