@@ -292,7 +292,7 @@ fn conn_strength(profile: &str) -> u8 {
 		.build().unwrap()
 		.captures(std::str::from_utf8(&conn_strength).unwrap()) {
 			Some(c) => (&c[2]).to_string().parse().unwrap(),
-			None	=> { println!("Couldn't parse iwconfig output!"); 0},
+			None	=> 0,
 		};
 	conn_strength
 }
