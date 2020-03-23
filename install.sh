@@ -1,4 +1,5 @@
 install -Dm755 target/release/netctl-tray "/usr/bin/netctl-tray"
+install -Dm755 target/release/netctl-auto-tray "/usr/bin/netctl-auto-tray"
 install -Dm755 scripts/netctltray "/etc/netctl/hooks/netctltray"
 install -d "/usr/share/netctl-tray/"
 install -Dm755 scripts/netctltray "/usr/share/netctl-tray/netctltray"
