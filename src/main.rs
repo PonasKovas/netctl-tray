@@ -11,13 +11,14 @@ use std::thread;
 use shells::sh;
 
 /// NoProfile - no profile is active
-/// Good/Medium/Bad - connection strength
+/// Good/Medium/Bad/NoSignal - connection strength
 /// The bool - is there internet?
 enum Status {
-	NoProfile,
-	Good(bool),
-	Medium(bool),
-	Bad(bool),
+   NoProfile,
+   Good(bool),
+   Medium(bool),
+   Bad(bool),
+   NoSignal(bool),
 }
 
 fn main() {
@@ -37,9 +38,11 @@ fn main() {
 				load_icon("/usr/share/netctl-tray/good.svg"),
 				load_icon("/usr/share/netctl-tray/medium.svg"),
 				load_icon("/usr/share/netctl-tray/bad.svg"),
+				load_icon("/usr/share/netctl-tray/no_signal.svg"),
 				load_icon("/usr/share/netctl-tray/good_no_internet.svg"),
 				load_icon("/usr/share/netctl-tray/medium_no_internet.svg"),
 				load_icon("/usr/share/netctl-tray/bad_no_internet.svg"),
+				load_icon("/usr/share/netctl-tray/no_signal_no_internet.svg"),
 			];
 			// initiliaze tray
 			let mut tray = QSystemTrayIcon::from_q_icon(
@@ -148,9 +151,11 @@ fn get_status_icon() -> usize {
 		Status::Good(true)      => 1,
 		Status::Medium(true)    => 2,
 		Status::Bad(true)       => 3,
-		Status::Good(false)     => 4,
-		Status::Medium(false)   => 5,
-		Status::Bad(false)      => 6,
+		Status::NoSignal(true)  => 4,
+		Status::Good(false)     => 5,
+		Status::Medium(false)   => 6,
+		Status::Bad(false)      => 7,
+		Status::NoSignal(false) => 8,
 	}
 }
 
@@ -180,9 +185,10 @@ fn get_status() -> Status {
 
 	// Finally return the status
 	match (conn_strength/24f32).ceil() as u8 {
-		3u8 => Status::Good(internet),
+		0u8 => Status::NoSignal(internet),
+		1u8 => Status::Bad(internet),
 		2u8 => Status::Medium(internet),
-		_ => Status::Bad(internet),
+		_   => Status::Good(internet),
 	}
 }
 
