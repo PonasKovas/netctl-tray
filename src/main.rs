@@ -109,7 +109,7 @@ fn main() {
 					
 				}
 			});
-			profiles_submenu.about_to_show().connect( &generate_profiles_submenu );
+			menu.about_to_show().connect( &generate_profiles_submenu );
 			// Add button to exit
 			let exit_app = Slot::new(|| {
 				std::process::exit(0);
@@ -131,8 +131,8 @@ fn main() {
 				);
 			});
 			let mut update_timer = QTimer::new_0a();
-			// Call it every second
-			update_timer.set_interval(1000);
+			// Call it every 2 seconds
+			update_timer.set_interval(2000);
 			update_timer.timeout().connect(&update_tray);
 			update_timer.start_0a();
 
@@ -255,7 +255,7 @@ fn send_notification(message: &str, as_root: bool) {
 }
 
 fn ping() -> String {
-	let (_, mut ping, _) = sh!("ping -qc1 google.com 2>&1 | awk -F'/' 'END{{ print (/^rtt/? $5:\"∞\") }}'");
+	let (_, mut ping, _) = sh!("ping -qc1 fast.com 2>&1 | awk -F'/' 'END{{ print (/^rtt/? $5:\"∞\") }}'");
 	ping = ping.trim().to_string();
 	match ping.parse::<f64>() {
 		Ok(n) => n.ceil().to_string(),
