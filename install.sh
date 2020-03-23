@@ -1,0 +1,10 @@
+install -Dm755 target/release/netctl-tray "/usr/bin/netctl-tray"
+install -Dm755 scripts/netctltray "/etc/netctl/hooks/netctltray"
+install -d "/usr/share/netctl-tray/"
+install -Dm755 scripts/netctltray "/usr/share/netctl-tray/netctltray"
+install -Dm755 scripts/connect "/usr/share/netctl-tray/connect"
+install -Dm755 scripts/disconnect "/usr/share/netctl-tray/disconnect"
+install -Dm644 assets/* "/usr/share/netctl-tray/"
+install -dm0750 "/usr/share/polkit-1/rules.d/"
+install -Dm0644 scripts/netctl-tray.rules "/usr/share/polkit-1/rules.d/netctltray.rules"
+
