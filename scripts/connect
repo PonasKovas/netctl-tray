@@ -3,6 +3,5 @@
 display=":$(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##' | head -n 1)"
 user=$(who | grep '('$display')' | awk '{print $1}' | head -n 1)
 uid=$(id -u $user)
-sleep 0.1
 profile=$(netctl list | grep -oP "^\* \K\w+$")
 su "$user" -c "DISPLAY=:$display DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus notify-send 'netctl' 'Profile <b>$profile</b> started' -t 4000 -i network-wireless"

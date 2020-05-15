@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>netctl-tray</vendor>
+  <vendor_url>https://github.com/PonasKovas/netctl-tray/</vendor_url>
+  <action id="org.freedesktop.policykit.example.pkexec.netctl-list">
+    <description>List netctl profiles</description>
+    <message>Authentication is required to list netctl profiles (user=$(user), program=$(program), command_line=$(command_line))</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/share/netctl-tray/netctl-list</annotate>
+  </action>
+  <action id="org.freedesktop.policykit.example.pkexec.netctl-switch-to">
+    <description>Switch netctl profiles</description>
+    <message>Authentication is required to switch netctl profiles (user=$(user), program=$(program), command_line=$(command_line))</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/share/netctl-tray/netctl-switch-to</annotate>
+  </action>
+  <action id="org.freedesktop.policykit.example.pkexec.netctl-auto-list">
+    <description>List netctl-auto profiles</description>
+    <message>Authentication is required to list netctl-auto profiles (user=$(user), program=$(program), command_line=$(command_line))</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/share/netctl-tray/netctl-auto-list</annotate>
+  </action>
+  <action id="org.freedesktop.policykit.example.pkexec.netctl-auto-switch-to">
+    <description>Switch netctl-auto profiles</description>
+    <message>Authentication is required to switch netctl-auto profiles (user=$(user), program=$(program), command_line=$(command_line))</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/share/netctl-tray/netctl-auto-switch-to</annotate>
+  </action>
+</policyconfig>

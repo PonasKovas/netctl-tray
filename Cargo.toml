@@ -1,7 +1,7 @@
 [package]
 name = "netctl-tray"
-version = "0.1.0"
-authors = ["Ponas <mykolas.peteraitis@gmail.com>"]
+version = "0.2.0"
+authors = ["Ponas <mykolas.peteraitis@gmail.com>", "Max Zinkus <zinkus@cs.jhu.edu>"]
 edition = "2018"
 
 [dependencies]
@@ -14,6 +14,5 @@ shells = "0.2.0"
 name = "netctl-tray"
 path = "src/main.rs"
 
-[[bin]]
-name = "netctl-auto-tray"
-path = "src/auto.rs"
+[features]
+auto = []
