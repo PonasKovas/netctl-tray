@@ -3,7 +3,15 @@ polkit.addRule(function(action, subject) {
     var netctlInstanceMatcher = /netctl@[a-z,\\,\d]+\.service/i.test(action.lookup("unit"));
         if (netctlInstanceMatcher) {
             var verb = action.lookup("verb");
-            if (verb == "start" || verb == "stop" || verb == "restart") {
+            if (verb == "switch-to") {
+                return polkit.Result.YES;
+            }
+        }
+    }
+    var netctlautoInstanceMatcher = /netctl-auto@[a-z,\\,\d]+\.service/i.test(action.lookup("unit"));
+        if (netctlInstanceMatcher) {
+            var verb = action.lookup("verb");
+            if (verb == "switch-to") {
                 return polkit.Result.YES;
             }
         }

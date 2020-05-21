@@ -1,298 +1,230 @@
-use qt_widgets::{QSystemTrayIcon, QApplication, QMenu, QActionGroup, SlotOfActivationReason};
-use qt_widgets::qt_core::{QTimer, QString, Slot, QByteArray};
-use qt_widgets::cpp_utils::CppBox;
-use qt_gui::{QIcon, QPixmap, QImage};
-use std::process::Command;
-use std::net::{TcpStream, SocketAddr};
-use regex::RegexBuilder;
-use std::time::Duration;
-use std::fs;
-use std::thread;
-use shells::sh;
+#![feature(vec_remove_item)]
 
-/// NoProfile - no profile is active
-/// Good/Medium/Bad/NoSignal - connection strength
-/// The bool - is there internet?
-enum Status {
-   NoProfile,
-   Good(bool),
-   Medium(bool),
-   Bad(bool),
-   NoSignal(bool),
+use notify::{
+    event::{Event as NEvent, EventKind as NEventKind},
+    immediate_watcher, RecursiveMode, Watcher,
+};
+use std::fs;
+use std::fs::File;
+use std::io::prelude::*;
+use std::net::{SocketAddr, TcpStream};
+use std::process::Command;
+use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "netctl-tray",
+    about = "A lightweight netctl tray app with notifications."
+)]
+struct Opt {
+    /// Tray icon update interval (seconds)
+    #[structopt(short, default_value = "2")]
+    interval: f32,
+    /// Host IP to connect to when checking ping
+    #[structopt(long, default_value = "1.1.1.1:53")]
+    host: SocketAddr, //Option<SocketAddr>,
+}
+
+#[derive(Debug)]
+struct State {
+    link_quality: u8,
+    ping: f32,
+    all_profiles: Arc<Mutex<Vec<String>>>,
+    active_profile: String,
 }
 
 fn main() {
-	// Check if started as root
-	let as_root = match std::env::var("USER") {
-		Ok(u) => { u=="root" },
-		Err(_)=> false,
-	};
-	if as_root {
-		println!("Warning: tray started as root! This is unsafe!");
-	}
-	// Start another thread for communicating with netctl
-	QApplication::init(|_app| {
-		unsafe {
-			let icons = [
-				load_icon("/usr/share/netctl-tray/no_profile.svg"),
-				load_icon("/usr/share/netctl-tray/good.svg"),
-				load_icon("/usr/share/netctl-tray/medium.svg"),
-				load_icon("/usr/share/netctl-tray/bad.svg"),
-				load_icon("/usr/share/netctl-tray/no_signal.svg"),
-				load_icon("/usr/share/netctl-tray/good_no_internet.svg"),
-				load_icon("/usr/share/netctl-tray/medium_no_internet.svg"),
-				load_icon("/usr/share/netctl-tray/bad_no_internet.svg"),
-				load_icon("/usr/share/netctl-tray/no_signal_no_internet.svg"),
-			];
-			// initiliaze tray
-			let mut tray = QSystemTrayIcon::from_q_icon(
-				icons[get_status_icon()].as_ref()
-			);
-			// Show the status notification on click of the tray
-			let tray_click = SlotOfActivationReason::new(|reason| {
-				let reason = reason.to_int();
-				if reason == 3 || reason == 4 {
-					thread::spawn(move || {
-						// Left-click or middle-click
-						// Find out the active profile
-						let mut active_profile = "none".to_string();
-						for (active, name) in get_profiles() {
-							if active {
-								active_profile = name;
-								break;
-							}
-						}
-						send_notification(&format!(
-							"Profile: <b>{}</b>, Ping: <b>{} ms</b>, Quality: <b>{}/70</b>",
-							active_profile,
-							ping(),
-							if active_profile == "none" { 0 } else {conn_strength(&active_profile) },
-						), as_root);
-					});
-				}
-			});
-			tray.activated().connect(&tray_click);
+    // Parse arguments
+    let args = Opt::from_args();
 
-			// Add the menu
-			let mut menu = QMenu::new();
-			tray.set_context_menu(menu.as_mut_ptr());
-			// Add profiles submenu
-			let profiles_submenu = menu.add_menu_q_string(
-				QString::from_std_str("Profiles").as_mut_ref()
-			);
-			let mut profile_actions_group = QActionGroup::new(profiles_submenu);
-			let group_ptr = profile_actions_group.as_mut_ptr();
-			let click = Slot::new( || {
-				set_profile( (*group_ptr.checked_action().text()).to_std_string() );
-			});
-			// Always update the profiles submenu before showing
-			let mut ptr_profiles_submenu = profiles_submenu.as_mut_ref().unwrap();
-			let generate_profiles_submenu = Slot::new(|| {
-				ptr_profiles_submenu.clear();
-				for (active, profile) in get_profiles() {
-					if active {
-						// Add the button with an icon
-						let mut action = ptr_profiles_submenu.add_action_q_string(
-							QString::from_std_str(&profile).as_mut_ref()
-						);
-						action.set_checkable(true);
-						action.set_checked(true);
-						action.set_action_group(profile_actions_group.as_mut_ptr());
-						action.triggered().connect(&click);
-					} else {
-						// Add the button without the "active" icon
-						let mut action = ptr_profiles_submenu.add_action_q_string(
-							QString::from_std_str(&profile).as_mut_ref()
-						);
-						action.set_checkable(true);
-						action.set_checked(false);
-						action.set_action_group(profile_actions_group.as_mut_ptr());
-						action.triggered().connect(&click);
-					}
-					
-				}
-			});
-			profiles_submenu.about_to_show().connect( &generate_profiles_submenu );
-			// Add button to exit
-			let exit_app = Slot::new(|| {
-				std::process::exit(0);
-			});
-			menu.add_action_q_icon_q_string(
-				QIcon::from_q_string(
-					QString::from_std_str("/usr/share/netctl-tray/exit.svg").as_mut_ref()
-				).as_mut_ref(),
-				QString::from_std_str("Exit").as_mut_ref()
-			).triggered().connect(&exit_app);
+    let mut state = State {
+        link_quality: 0,
+        ping: 0.0,
+        all_profiles: Arc::new(Mutex::new(Vec::new())),
+        active_profile: String::new(),
+    };
 
-			tray.show();
+    // Do the initial profiles scan
+    if let Err(e) = scan_profiles(&mut *state.all_profiles.lock().unwrap()) {
+        eprintln!("Error while scanning profiles: {:?}", e);
+        return;
+    }
 
-			// Make a function which will update the tray stuff when needed
-			let update_tray = Slot::new(move || {
-				// Update the tray icon based on the status of the connection
-				tray.set_icon(
-					icons[get_status_icon()].as_ref()
-				);
-			});
-			let mut update_timer = QTimer::new_0a();
-			// Call it every second
-			update_timer.set_interval(1000);
-			update_timer.timeout().connect(&update_tray);
-			update_timer.start_0a();
+    let all_profiles_clone = state.all_profiles.clone();
 
-			QApplication::exec()
-		}
-	})
+    // initialize the inotify watcher
+    let mut watcher = match immediate_watcher(move |res: Result<NEvent, _>| match res {
+        Ok(event) => {
+            match event.kind {
+                NEventKind::Create(_) => {
+                    // Add the new profile
+                    for path in event.paths {
+                        match path.file_name().unwrap().to_str() {
+                            Some(p) => all_profiles_clone.lock().unwrap().push(p.to_owned()),
+                            None => {
+                                eprintln!(
+                                    "Can't convert OsStr to str: {:?}",
+                                    path.file_name().unwrap()
+                                );
+                                continue;
+                            }
+                        };
+                    }
+                }
+                NEventKind::Remove(_) => {
+                    // Remove the profile
+                    for path in event.paths {
+                        match path.file_name().unwrap().to_str() {
+                            Some(p) => all_profiles_clone.lock().unwrap().remove_item(&p),
+                            None => {
+                                eprintln!(
+                                    "Can't convert OsStr to str: {:?}",
+                                    path.file_name().unwrap()
+                                );
+                                continue;
+                            }
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+        Err(e) => eprintln!("watch error: {:?}", e),
+    }) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("error initializing watcher: {:?}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = watcher.watch("/etc/netctl", RecursiveMode::Recursive) {
+        eprintln!("error watching: {:?}", e);
+    }
+
+    loop {
+        let start = Instant::now();
+
+        if let Err(e) = update_state(&mut state, args.host) {
+        	eprintln!("Can't update tray state: {:?}", e);
+        }
+        println!("{:?}", state);
+        sleep(
+            Duration::from_secs_f32(args.interval)
+                .checked_sub(start.elapsed())
+                .unwrap_or(Duration::new(0, 0)),
+        );
+    }
 }
 
-/// Returns a path to an icon depending on the status of the wifi 
-fn get_status_icon() -> usize {
-	match get_status() {
-		Status::NoProfile       => 0,
-		Status::Good(true)      => 1,
-		Status::Medium(true)    => 2,
-		Status::Bad(true)       => 3,
-		Status::NoSignal(true)  => 4,
-		Status::Good(false)     => 5,
-		Status::Medium(false)   => 6,
-		Status::Bad(false)      => 7,
-		Status::NoSignal(false) => 8,
-	}
+// Scans the files in /etc/netctl and adds the profiles to the vector
+fn scan_profiles(all_profiles: &mut Vec<String>) -> Result<(), std::io::Error> {
+    // for every file or folder in /etc/netcl
+    for entry in fs::read_dir("/etc/netctl/")? {
+        let path = entry?.path();
+        let metadata = path.metadata()?;
+        if metadata.is_file() {
+            // the file name of the profile configuration
+            // is the name of the profile.
+            let profile_name = match path.file_name().unwrap().to_str() {
+                Some(f) => f,
+                None => {
+                    eprintln!(
+                        "Can't convert OsStr to str: {:?}",
+                        path.file_name().unwrap()
+                    );
+                    continue;
+                }
+            };
+            // add the profile to the vector
+            all_profiles.push(profile_name.to_owned());
+        }
+    }
+    Ok(())
 }
 
-fn get_status() -> Status {
-	// Check if any profiles are active
-	let active_profile = Command::new("netctl")
-			.arg("list")
-			.output()
-			.expect("failed to run netctl").stdout;
-	if !active_profile.contains(&42) { // An asterisk
-		return Status::NoProfile;
-	}
-	
-	// Check if there's internet
-	let internet = match TcpStream::connect_timeout(&SocketAddr::from(([1, 1, 1, 1], 53)), Duration::from_millis(500)) {
-		Ok(_) => true,
-		Err(_) => false,
-	};
+// Updates the netctl-tray state: ping, quality and current active profile
+fn update_state(state: &mut State, ip: SocketAddr) -> Result<(), std::io::Error> {
+    // get the current active profile
+    let raw_profiles = Command::new("netctl").arg("list").output()?;
+    // Iterate through each line
+    for line in raw_profiles.stdout.split(|c| *c == '\n' as u8) {
+        if line.len() == 0 {
+            continue;
+        }
+        // If the line starts with an asterisk, then the profile is active
+        // and we need it's name
+        if line[0] == '*' as u8 {
+            state.active_profile = match std::str::from_utf8(&line[2..]) {
+                Ok(s) => s.to_owned(),
+                Err(e) => {
+                    eprintln!("Can't read profile name from netctl list: {:?}", e);
+                    break;
+                }
+            };
+        }
+    }
 
-	let active_profile = RegexBuilder::new(r"^\* (.+)$")
-		.multi_line(true)
-		.build().unwrap()
-		.captures(std::str::from_utf8(&active_profile).unwrap())
-		.expect("Couldn't parse netctl list output");
+    // Now we need to get the interface the current profile uses
+    let mut current_profile_file = File::open(&format!("/etc/netctl/{}", state.active_profile))?;
+    let mut current_profile_contents = String::new();
+    current_profile_file.read_to_string(&mut current_profile_contents)?;
+    // iterate over lines to find the one specifying the interface
+    let mut profile_interface = "";
+    for line in current_profile_contents.split('\n') {
+        if line.starts_with("Interface") {
+            // This is hacky but should work with sane profiles
+            let mut interface = match line.split('=').nth(1) {
+                Some(i) => i,
+                None => {
+                    eprintln!(
+                        "Profile not properly configured! Corrupted file: /etc/netctl/{}",
+                        state.active_profile
+                    );
+                    continue;
+                }
+            }
+            .trim();
+            // Remove quotes if there
+            if interface.starts_with('"') && interface.ends_with('"') {
+                interface = &interface[1..interface.len() - 1];
+            } else if interface.starts_with('\'') && interface.ends_with('\'') {
+                interface = &interface[1..interface.len() - 1];
+            }
+            profile_interface = interface;
+            break;
+        }
+    }
 
-	let conn_strength = conn_strength(&active_profile[1]) as f32;
+    // Now, as we know the used interface we can check the link quality
+    // It can be found in /proc/net/wireless
+    let mut file = File::open("/proc/net/wireless")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    // iterate over lines and find the one describing our needed interface
+    for line in contents.split('\n').skip(2) {
+        if line.starts_with(profile_interface) {
+            // Found the line
+            // find the right column
+            let mut columns = line.split(' ').filter(|x| !x.is_empty());
+            let mut link_quality = columns.nth(2).unwrap();
+            // remove the last char which is a dot apparently
+            link_quality = &link_quality[..link_quality.len() - 1];
+            let link_quality: u8 = link_quality.parse().unwrap();
+            state.link_quality = link_quality;
+        }
+    }
 
-	// Finally return the status
-	match (conn_strength/24f32).ceil() as u8 {
-		0u8 => Status::NoSignal(internet),
-		1u8 => Status::Bad(internet),
-		2u8 => Status::Medium(internet),
-		_   => Status::Good(internet),
-	}
-}
-
-fn get_profiles() -> Vec<(bool, String)> {
-	let mut profiles = Vec::new();
-	// Get the list of all profiles
-	let raw_profiles = Command::new("netctl")
-		.arg("list")
-		.output()
-		.expect("failed to run netctl").stdout;
-	// Iterate through each line
-	for line in raw_profiles.split(|c| *c == '\n' as u8) {
-		if line.len() == 0 { continue; }
-		// If the line starts with an asterisk, then the profile is active
-		let active = line[0] == '*' as u8;
-		let profile_name = std::str::from_utf8(&line[2..]).unwrap().to_string();
-		profiles.push((active, profile_name));
-	}
-
-	profiles
-}
-
-fn set_profile(profile: String) {
-	thread::spawn( move || {
-		// Stop the currently active profile
-		let profiles = get_profiles();
-		for (active, name) in profiles {
-			if active {
-				// It's already active
-				Command::new("netctl")
-						.arg("stop")
-						.arg(name)
-						.output()
-						.expect("failed to run netctl");
-				break;
-			}
-		}
-		// Start the new profile
-		Command::new("netctl")
-				.arg("start")
-				.arg(profile)
-				.output()
-				.expect("failed to run netctl");
-		});
-}
-
-unsafe fn load_icon(path: &str) -> CppBox<QIcon> {
-	QIcon::from_q_pixmap(
-		QPixmap::from_image_1a(
-			QImage::from_data_q_byte_array(
-				QByteArray::from_slice(
-					fs::read_to_string(path).unwrap().as_bytes()
-				).as_ref()
-			).as_ref()
-		).as_ref()
-	)
-}
-
-fn send_notification(message: &str, as_root: bool) {
-	if as_root {
-		let (_, display, _) = sh!("echo -n $(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##' | head -n 1)");
-		let (_, user, _) = sh!("echo -n $(who | grep '(:{})' | awk '{{print $1}}' | head -n 1)", display);
-		let (_, uid, _) = sh!("echo -n $(id -u {})", user);
-
-		sh!("su {} -c \"DISPLAY=:{} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{}/bus notify-send 'netctl' '{}' -t 4000 -i network-wireless\"", user, display, uid, message);
-	} else {
-		sh!("notify-send 'netctl' '{}' -t 4000 -i network-wireless", message);
-	}
-	
-}
-
-fn ping() -> String {
-	let (_, mut ping, _) = sh!("ping -qc1 google.com 2>&1 | awk -F'/' 'END{{ print (/^rtt/? $5:\"∞\") }}'");
-	ping = ping.trim().to_string();
-	match ping.parse::<f64>() {
-		Ok(n) => n.ceil().to_string(),
-		Err(_)=> ping
-	}
-}
-
-fn conn_strength(profile: &str) -> u8 {
-	// Get the interface the active profile is using
-	let used_interface = Command::new("cat")
-			.arg("/etc/netctl/".to_owned()+profile)
-			.output()
-			.expect(&format!("failed to read /etc/netctl/{}", profile)).stdout;
-	let used_interface = RegexBuilder::new(r"^Interface\s*=\s*(.+)$")
-		.multi_line(true)
-		.case_insensitive(true)
-		.build().unwrap()
-		.captures(std::str::from_utf8(&used_interface).unwrap())
-		.expect(&format!("Couldn't read the interface from /etc/netctl/{}", profile));
-
-	// Check the strength of the connection
-	let conn_strength = Command::new("iwconfig")
-			.output()
-			.expect("failed to run iwconfig").stdout;
-	let conn_strength: u8 = match
-		RegexBuilder::new(&((&used_interface[1]).to_string() + r"(.|\n)+?Link Quality=([0-9]+)/70"))
-		.case_insensitive(true)
-		.build().unwrap()
-		.captures(std::str::from_utf8(&conn_strength).unwrap()) {
-			Some(c) => (&c[2]).to_string().parse().unwrap(),
-			None	=> { println!("Couldn't parse iwconfig output!"); 0},
-		};
-	conn_strength
+    // and the last thing to do is to check ping
+    // try connecting to the given IP
+    let now = Instant::now();
+    if TcpStream::connect_timeout(&ip, Duration::from_nanos(500_000_000)).is_ok() {
+        state.ping = now.elapsed().as_millis() as f32;
+    } else {
+        state.ping = f32::INFINITY;
+    }
+    Ok(())
 }
