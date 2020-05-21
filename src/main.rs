@@ -4,6 +4,7 @@ use notify::{
     event::{Event as NEvent, EventKind as NEventKind},
     immediate_watcher, RecursiveMode, Watcher,
 };
+use notify_rust::{Notification, Timeout};
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -21,11 +22,14 @@ use structopt::StructOpt;
 )]
 struct Opt {
     /// Tray icon update interval (seconds)
-    #[structopt(short, default_value = "2")]
+    #[structopt(short, long, default_value = "2")]
     interval: f32,
     /// Host IP to connect to when checking ping
     #[structopt(long, default_value = "1.1.1.1:53")]
-    host: SocketAddr, //Option<SocketAddr>,
+    host: SocketAddr,
+    /// Disables desktop notifications on profile start/stop
+    #[structopt(short)]
+    disable_notifications: bool,
 }
 
 #[derive(Debug)]
@@ -33,7 +37,7 @@ struct State {
     link_quality: u8,
     ping: f32,
     all_profiles: Arc<Mutex<Vec<String>>>,
-    active_profile: String,
+    active_profile: Option<String>,
 }
 
 fn main() {
@@ -44,7 +48,7 @@ fn main() {
         link_quality: 0,
         ping: 0.0,
         all_profiles: Arc::new(Mutex::new(Vec::new())),
-        active_profile: String::new(),
+        active_profile: None,
     };
 
     // Do the initial profiles scan
@@ -108,8 +112,8 @@ fn main() {
     loop {
         let start = Instant::now();
 
-        if let Err(e) = update_state(&mut state, args.host) {
-        	eprintln!("Can't update tray state: {:?}", e);
+        if let Err(e) = update_state(&mut state, &args) {
+            eprintln!("Can't update tray state: {:?}", e);
         }
         println!("{:?}", state);
         sleep(
@@ -147,10 +151,11 @@ fn scan_profiles(all_profiles: &mut Vec<String>) -> Result<(), std::io::Error> {
 }
 
 // Updates the netctl-tray state: ping, quality and current active profile
-fn update_state(state: &mut State, ip: SocketAddr) -> Result<(), std::io::Error> {
+fn update_state(state: &mut State, args: &Opt) -> Result<(), std::io::Error> {
     // get the current active profile
     let raw_profiles = Command::new("netctl").arg("list").output()?;
     // Iterate through each line
+    let mut active_profile = None;
     for line in raw_profiles.stdout.split(|c| *c == '\n' as u8) {
         if line.len() == 0 {
             continue;
@@ -158,70 +163,118 @@ fn update_state(state: &mut State, ip: SocketAddr) -> Result<(), std::io::Error>
         // If the line starts with an asterisk, then the profile is active
         // and we need it's name
         if line[0] == '*' as u8 {
-            state.active_profile = match std::str::from_utf8(&line[2..]) {
-                Ok(s) => s.to_owned(),
+            active_profile = match std::str::from_utf8(&line[2..]) {
+                Ok(s) => Some(s.to_owned()),
                 Err(e) => {
                     eprintln!("Can't read profile name from netctl list: {:?}", e);
                     break;
                 }
             };
-        }
-    }
-
-    // Now we need to get the interface the current profile uses
-    let mut current_profile_file = File::open(&format!("/etc/netctl/{}", state.active_profile))?;
-    let mut current_profile_contents = String::new();
-    current_profile_file.read_to_string(&mut current_profile_contents)?;
-    // iterate over lines to find the one specifying the interface
-    let mut profile_interface = "";
-    for line in current_profile_contents.split('\n') {
-        if line.starts_with("Interface") {
-            // This is hacky but should work with sane profiles
-            let mut interface = match line.split('=').nth(1) {
-                Some(i) => i,
-                None => {
-                    eprintln!(
-                        "Profile not properly configured! Corrupted file: /etc/netctl/{}",
-                        state.active_profile
-                    );
-                    continue;
-                }
-            }
-            .trim();
-            // Remove quotes if there
-            if interface.starts_with('"') && interface.ends_with('"') {
-                interface = &interface[1..interface.len() - 1];
-            } else if interface.starts_with('\'') && interface.ends_with('\'') {
-                interface = &interface[1..interface.len() - 1];
-            }
-            profile_interface = interface;
             break;
         }
     }
+    // If active profile changed, show notification
+    match (&state.active_profile, &active_profile) {
+        (None, Some(new)) => {
+            // Profile started, send notification
+            if let Err(e) = Notification::new()
+                .summary("netctl")
+                .body(&format!("Profile <b>{}</b> started.", new))
+                .icon("network-wireless")
+                .timeout(Timeout::Milliseconds(5000))
+                .show()
+            {
+                eprintln!("Error sending desktop notification: {:?}", e);
+            }
+        }
+        (Some(old), None) => {
+            // Profile stopped, send notification
+            if let Err(e) = Notification::new()
+                .summary("netctl")
+                .body(&format!("Profile <b>{}</b> stopped.", old))
+                .icon("network-wireless")
+                .timeout(Timeout::Milliseconds(5000))
+                .show()
+            {
+                eprintln!("Error sending desktop notification: {:?}", e);
+            }
+        }
+        (Some(old), Some(new)) => {
+            if old != new {
+                // Profile switched, send notification
+                if let Err(e) = Notification::new()
+                    .summary("netctl")
+                    .body(&format!(
+                        "Profile switched: from <b>{}</b> to <b>{}</b>.",
+                        old, new
+                    ))
+                    .icon("network-wireless")
+                    .timeout(Timeout::Milliseconds(5000))
+                    .show()
+                {
+                    eprintln!("Error sending desktop notification: {:?}", e);
+                }
+            }
+        }
+        _ => {}
+    }
+    state.active_profile = active_profile;
 
-    // Now, as we know the used interface we can check the link quality
-    // It can be found in /proc/net/wireless
-    let mut file = File::open("/proc/net/wireless")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    // iterate over lines and find the one describing our needed interface
-    for line in contents.split('\n').skip(2) {
-        if line.starts_with(profile_interface) {
-            // Found the line
-            // find the right column
-            let mut columns = line.split(' ').filter(|x| !x.is_empty());
-            let mut link_quality = columns.nth(2).unwrap();
-            // remove the last char which is a dot apparently
-            link_quality = &link_quality[..link_quality.len() - 1];
-            let link_quality: u8 = link_quality.parse().unwrap();
-            state.link_quality = link_quality;
+    if let Some(active_profile) = &state.active_profile {
+        // Now we need to get the interface the current profile uses
+        let mut current_profile_file = File::open(&format!("/etc/netctl/{}", active_profile))?;
+        let mut current_profile_contents = String::new();
+        current_profile_file.read_to_string(&mut current_profile_contents)?;
+        // iterate over lines to find the one specifying the interface
+        let mut profile_interface = "";
+        for line in current_profile_contents.split('\n') {
+            if line.starts_with("Interface") {
+                let mut interface = match line.split('=').nth(1) {
+                    Some(i) => i,
+                    None => {
+                        eprintln!(
+                            "Profile not properly configured! Corrupted file: /etc/netctl/{}",
+                            active_profile
+                        );
+                        continue;
+                    }
+                }
+                .trim();
+                // Remove quotes if there
+                if interface.starts_with('"') && interface.ends_with('"') {
+                    interface = &interface[1..interface.len() - 1];
+                } else if interface.starts_with('\'') && interface.ends_with('\'') {
+                    interface = &interface[1..interface.len() - 1];
+                }
+                profile_interface = interface;
+                break;
+            }
+        }
+
+        // Now, as we know the used interface we can check the link quality
+        // It can be found in /proc/net/wireless
+        let mut file = File::open("/proc/net/wireless")?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        // iterate over lines and find the one describing our needed interface
+        for line in contents.split('\n').skip(2) {
+            if line.starts_with(profile_interface) {
+                // Found the line
+                // find the right column
+                let mut columns = line.split(' ').filter(|x| !x.is_empty());
+                let mut link_quality = columns.nth(2).unwrap();
+                // remove the last char which is a dot apparently
+                link_quality = &link_quality[..link_quality.len() - 1];
+                let link_quality: u8 = link_quality.parse().unwrap();
+                state.link_quality = link_quality;
+            }
         }
     }
 
     // and the last thing to do is to check ping
     // try connecting to the given IP
     let now = Instant::now();
-    if TcpStream::connect_timeout(&ip, Duration::from_nanos(500_000_000)).is_ok() {
+    if TcpStream::connect_timeout(&args.host, Duration::from_nanos(500_000_000)).is_ok() {
         state.ping = now.elapsed().as_millis() as f32;
     } else {
         state.ping = f32::INFINITY;
