@@ -10,6 +10,7 @@ qt_gui = "0.3.0"
 notify = "5.0.0-pre.2" # watching filesystem
 notify-rust = "3" # desktop notifications
 structopt = "0.3.14"
+users = "0.10.0"
 
 [features]
 auto = []
