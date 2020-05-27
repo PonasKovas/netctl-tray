@@ -11,15 +11,27 @@ To launch the tray app:
 ```
 $ netctl-tray
 ```
+You have to be in group `wheel` for it to work properly.
+To add an user to it, use:
+```
+# usermod -a -G wheel <user>
+```
+
+## Compiling
+
+This application needs to be compiled for netctl and netctl-auto separately.
+For `netctl`:
+```
+cargo build --release
+```
+For `netctl-auto`:
+```
+cargo build --release --features "auto"
+```
 
 ## Installation
 
-[This app is available on the AUR](https://aur.archlinux.org/packages/netctl-tray/)
-```
-$ git clone https://aur.archlinux.org/netctl-tray.git
-$ cd netctl-tray
-$ makepkg -si
-```
+This app is available on the AUR: [netctl-tray](https://aur.archlinux.org/packages/netctl-tray/) and [netctl-tray-auto](https://aur.archlinux.org/packages/netctl-tray-auto/)
 
 ## Contributing
 

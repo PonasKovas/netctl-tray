@@ -96,7 +96,10 @@ pub fn scan_profiles(all_profiles: &mut Vec<String>) -> Result<(), std::io::Erro
 // Updates the netctl-tray state: ping, quality and current active profile
 pub fn update_state(state: &mut State, args: &Opt) -> Result<(), std::io::Error> {
     // get the current active profile
+    #[cfg(not(feature = "auto"))]
     let raw_profiles = Command::new("netctl").arg("list").output()?;
+    #[cfg(feature = "auto")]
+    let raw_profiles = Command::new("netctl-auto").arg("list").output()?;
     // Iterate through each line
     let mut active_profile = None;
     for line in raw_profiles.stdout.split(|c| *c == '\n' as u8) {
