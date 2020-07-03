@@ -46,7 +46,9 @@ pub fn inotify_watch(
                     // Remove the profile
                     for path in event.paths {
                         match path.file_name().unwrap().to_str() {
-                            Some(p) => all_profiles.lock().unwrap().remove_item(&p),
+                            Some(p) => {
+                                all_profiles.lock().unwrap().retain(|x| *x != p);
+                            }
                             None => {
                                 eprintln!(
                                     "Can't convert OsStr to str: {:?}",

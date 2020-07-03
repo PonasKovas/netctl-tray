@@ -37,10 +37,15 @@ fn main() {
     // Parse arguments
     let args = Opt::from_args();
 
-    // Then make sure the user running this is in the group `wheel`
-    if !is_user_in_wheel() {
+    // Then make sure the user running this is in the group `wheel` and `network`
+    let (in_wheel, in_network) = is_user_in_wheel_and_network();
+    if !in_wheel {
         eprintln!("Warning! You are not in group 'wheel', netctl-tray might not work or work only partially.");
     }
+    if !in_network {
+        eprintln!("Warning! You are not in group 'network', netctl-tray might not work or work only partially.");
+    }
+
     let mut state = State {
         link_quality: 0,
         ping: 0.0,
@@ -268,12 +273,12 @@ fn profile_notification(
     Ok(())
 }
 
-fn is_user_in_wheel() -> bool {
+fn is_user_in_wheel_and_network() -> (bool, bool) {
     let username = match get_current_username() {
         Some(s) => s,
         None => {
             eprintln!("Can't get current user!");
-            return false;
+            return (false, false);
         }
     };
 
@@ -281,18 +286,21 @@ fn is_user_in_wheel() -> bool {
         Some(g) => g,
         None => {
             eprintln!("Couldn't get the list of groups the user is in.");
-            return false;
+            return (false, false);
         }
     };
 
-    // check if in wheel
+    let mut in_wheel = false;
+    let mut in_network = false;
     for group in groups {
         if group.name() == OsStr::new("network") {
-            return true;
+            in_network = true;
+        } else if group.name() == OsStr::new("wheel") {
+            in_wheel = true;
         }
     }
 
-    false
+    (in_wheel, in_network)
 }
 
 fn get_status_icon(state: &mut State) -> CppBox<QIcon> {
