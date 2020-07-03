@@ -1,4 +1,3 @@
-#![feature(vec_remove_item)]
 #![feature(exclusive_range_pattern)]
 
 mod state;
