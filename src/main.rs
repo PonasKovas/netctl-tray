@@ -25,7 +25,7 @@ pub struct Opt {
     #[structopt(short, long, default_value = "2")]
     pub interval: f32,
     /// Host IP to connect to when checking ping
-    #[structopt(long, default_value = "1.1.1.1:53")]
+    #[structopt(long, default_value = "1.1.1.1:80")]
     pub host: SocketAddr,
     /// Disables desktop notifications on profile start/stop
     #[structopt(short)]
