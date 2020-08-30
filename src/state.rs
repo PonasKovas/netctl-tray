@@ -6,7 +6,6 @@ use notify::{
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
-use std::net::TcpStream;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -177,12 +176,20 @@ pub fn update_state(state: &mut State, args: &Opt) -> Result<(), std::io::Error>
     }
 
     // check ping
-    // try connecting to the given IP
     let now = Instant::now();
-    if TcpStream::connect_timeout(&args.host, Duration::from_nanos(500_000_000)).is_ok() {
-        state.ping = now.elapsed().as_millis() as f32;
-    } else {
-        state.ping = f32::INFINITY;
+    match ping::ping(
+        args.host,
+        Some(Duration::from_nanos(500_000_000)),
+        None,
+        None,
+        None,
+        None,
+    ) {
+        Ok(()) => state.ping = now.elapsed().as_millis() as f32,
+        Err(e) => {
+            state.ping = f32::INFINITY;
+            eprintln!("{:?}", e);
+        }
     }
 
     Ok(())

@@ -9,7 +9,7 @@ use qt_widgets::qt_core::{QString, QTimer, Slot};
 use qt_widgets::{QActionGroup, QApplication, QMenu, QSystemTrayIcon, SlotOfActivationReason};
 use state::{inotify_watch, scan_profiles, update_state, State};
 use std::ffi::OsStr;
-use std::net::SocketAddr;
+use std::net::IpAddr;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
@@ -25,8 +25,8 @@ pub struct Opt {
     #[structopt(short, long, default_value = "2")]
     pub interval: f32,
     /// Host IP to connect to when checking ping
-    #[structopt(long, default_value = "1.1.1.1:53")]
-    pub host: SocketAddr,
+    #[structopt(long, default_value = "1.1.1.1")]
+    pub host: IpAddr,
     /// Disables desktop notifications on profile start/stop
     #[structopt(short)]
     pub disable_notifications: bool,
