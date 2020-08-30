@@ -11,10 +11,10 @@ To launch the tray app:
 ```
 $ netctl-tray
 ```
-You have to be in group `wheel` for it to work properly.
-To add an user to it, use:
+You have to be in groups `wheel` and `network` for it to work properly.  
+To add an user to them, use:
 ```
-# usermod -a -G wheel <user>
+# usermod -a -G wheel,network <user>
 ```
 
 ## Compiling
