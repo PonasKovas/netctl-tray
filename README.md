@@ -1,6 +1,8 @@
 # netctl-tray
 A lightweight netctl tray app with notifications written in Rust.
 
+### Note: This repository has been archived, since I personally no longer use `netctl` and can't furtherly develop or fix bugs of this project. If anyone wants to take over, feel free to make an issue.
+
 ## Screenshots
 
 ![](https://i.imgur.com/5PavZiO.png) ![](https://i.imgur.com/mwWpkA4.png) ![](https://i.imgur.com/yghZ4Gt.png)
